@@ -1,0 +1,145 @@
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import javax.persistence.*;
+import org.hibernate.Session;
+import org.hibernate.SessionFactory;
+import org.hibernate.Transaction;
+import org.hibernate.cfg.Configuration;
+
+// Easy Level: Spring Dependency Injection
+class Course {
+    private String courseName;
+    private int duration;
+    public Course(String courseName, int duration) {
+        this.courseName = courseName;
+        this.duration = duration;
+    }
+    public String getDetails() {
+        return courseName + " (" + duration + " months)";
+    }
+}
+
+class Student {
+    private String name;
+    private Course course;
+    public Student(String name, Course course) {
+        this.name = name;
+        this.course = course;
+    }
+    public void showDetails() {
+        System.out.println("Student: " + name + ", Course: " + course.getDetails());
+    }
+}
+
+@Configuration
+class AppConfig {
+    @Bean
+    public Course course() {
+        return new Course("Java Programming", 6);
+    }
+    @Bean
+    public Student student() {
+        return new Student("Alice", course());
+    }
+}
+
+public class SpringDIApp {
+    public static void main(String[] args) {
+        ApplicationContext context = new AnnotationConfigApplicationContext(AppConfig.class);
+        Student student = context.getBean(Student.class);
+        student.showDetails();
+    }
+}
+
+// Medium Level: Hibernate CRUD
+@Entity
+@Table(name = "students")
+class StudentEntity {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int id;
+    private String name;
+    private int age;
+    // Getters and Setters
+}
+
+public class HibernateCRUD {
+    private static SessionFactory factory;
+    static {
+        factory = new Configuration().configure("hibernate.cfg.xml").addAnnotatedClass(StudentEntity.class).buildSessionFactory();
+    }
+    public void saveStudent(String name, int age) {
+        Session session = factory.openSession();
+        Transaction tx = session.beginTransaction();
+        StudentEntity student = new StudentEntity();
+        student.setName(name);
+        student.setAge(age);
+        session.save(student);
+        tx.commit();
+        session.close();
+    }
+    public void readStudents() {
+        Session session = factory.openSession();
+        List<StudentEntity> students = session.createQuery("FROM StudentEntity", StudentEntity.class).list();
+        students.forEach(s -> System.out.println(s.getName() + " - " + s.getAge()));
+        session.close();
+    }
+    public static void main(String[] args) {
+        HibernateCRUD crud = new HibernateCRUD();
+        crud.saveStudent("Bob", 22);
+        crud.readStudents();
+    }
+}
+
+// Hard Level: Spring + Hibernate Transaction Management
+@Entity
+@Table(name = "accounts")
+class Account {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int id;
+    private String holderName;
+    private double balance;
+    // Getters and Setters
+}
+
+@Entity
+@Table(name = "transactions")
+class TransactionEntity {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int id;
+    private int fromAccount;
+    private int toAccount;
+    private double amount;
+    // Getters and Setters
+}
+
+public class BankingService {
+    private static SessionFactory factory;
+    static {
+        factory = new Configuration().configure("hibernate.cfg.xml").addAnnotatedClass(Account.class).addAnnotatedClass(TransactionEntity.class).buildSessionFactory();
+    }
+    public void transferMoney(int fromId, int toId, double amount) {
+        Session session = factory.openSession();
+        Transaction tx = session.beginTransaction();
+        try {
+            Account from = session.get(Account.class, fromId);
+            Account to = session.get(Account.class, toId);
+            if (from.getBalance() < amount) throw new RuntimeException("Insufficient funds");
+            from.setBalance(from.getBalance() - amount);
+            to.setBalance(to.getBalance() + amount);
+            session.save(new TransactionEntity(fromId, toId, amount));
+            session.update(from);
+            session.update(to);
+            tx.commit();
+        } catch (Exception e) {
+            tx.rollback();
+            System.out.println("Transaction failed: " + e.getMessage());
+        } finally {
+            session.close();
+        }
+    }
+}
